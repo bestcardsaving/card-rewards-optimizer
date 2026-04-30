@@ -2,33 +2,20 @@ import React, { useState, useEffect, useMemo } from "react";
 
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTw7Eqlez9794Rm_bBc5_vBxQH8HQVjK9dgqPZNHeucbCpHB-UAZpmGXMBkF9Md1PEGt8sGy7OUYPV2/pub?output=csv";
 
-// Added more store icons for the "huge database" feel
-const POPULAR_STORES = [
-  { name: "Walmart", icon: "🏪", category: "walmart" },
-  { name: "Target", icon: "🎯", category: "target" },
-  { name: "Amazon", icon: "📱", category: "amazon" },
-  { name: "Costco", icon: "📦", category: "wholesale" },
-  { name: "Starbucks", icon: "☕", category: "dining" },
-  { name: "Shell", icon: "⛽", category: "gas" },
-];
-
-// The "Smart Filter" categories
-const FILTERS = [
-  { name: "Grocery", icon: "🛒", category: "grocery" },
-  { name: "Dining", icon: "🍔", category: "dining" },
-  { name: "Gas", icon: "⛽", category: "gas" },
-  { name: "Shopping", icon: "🛍️", category: "all" },
-];
-
+// Logic to identify US Merchant Overrides
 const mapSearchToCategory = (term) => {
   const t = term.toLowerCase();
+  
+  // 1. Merchant Overrides (Exclusions from Grocery)
+  if (t.includes("costco") || t.includes("sam's club") || t.includes("bj's")) return "all"; // Wholesale usually codes as 1-2%
   if (t.includes("walmart")) return "walmart";
   if (t.includes("target")) return "target";
   if (t.includes("amazon")) return "amazon";
-  
-  const gasKeywords = ["gas", "fuel", "shell", "exxon", "mobil", "chevron", "76", "costco gas"];
+
+  // 2. US Category Keywords
+  const gasKeywords = ["gas", "fuel", "shell", "exxon", "mobil", "chevron", "76", "speedway"];
   const diningKeywords = ["dining", "restaurant", "food", "eat", "cafe", "starbucks", "mcdonald", "pizza", "chipotle", "subway"];
-  const groceryKeywords = ["grocery", "market", "supermarket", "kroger", "publix", "aldi", "whole foods", "trader joe", "safeway"];
+  const groceryKeywords = ["grocery", "market", "supermarket", "kroger", "publix", "aldi", "whole foods", "trader joe", "safeway", "vons", "meijer"];
   
   if (gasKeywords.some(k => t.includes(k))) return "gas";
   if (diningKeywords.some(k => t.includes(k))) return "dining";
@@ -41,7 +28,6 @@ export default function App() {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
-  const [purchaseAmount, setPurchaseAmount] = useState(100);
 
   useEffect(() => {
     fetch(CSV_URL).then(res => res.text()).then(text => {
@@ -69,61 +55,21 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#fafafa", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: 40 }}>
-      {/* Dynamic Header */}
+      {/* US Launch Header */}
       <div style={{ background: "linear-gradient(135deg, #0f172a, #1e293b)", padding: "40px 20px 30px", borderRadius: "0 0 30px 30px", color: "#fff", textAlign: "center" }}>
         <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Card Optimizer</h1>
-        <p style={{ opacity: 0.7, fontSize: 14, marginTop: 8 }}>Find the best card for {searchText ? <strong>{searchText}</strong> : "your purchase"}.</p>
+        <p style={{ opacity: 0.7, fontSize: 14, marginTop: 8 }}>Optimized for 90% of US Merchants.</p>
       </div>
 
-      {/* Search Input */}
-      <div style={{ padding: "20px 16px 10px" }}>
+      <div style={{ padding: "20px 16px" }}>
         <input 
           style={{ width: "100%", padding: "18px", borderRadius: "16px", border: "1px solid #ddd", boxShadow: "0 4px 15px rgba(0,0,0,0.05)", outline: "none", fontSize: 16 }}
-          placeholder="Where are you shopping?" 
+          placeholder="Where are you shopping? (e.g. Costco)" 
           value={searchText} 
           onChange={e => setSearchText(e.target.value)} 
         />
       </div>
 
-      {/* NEW: Filter Bar */}
-      <div style={{ padding: "0 16px 20px", display: "flex", gap: 8, overflowX: "auto", whiteSpace: "nowrap" }}>
-        {FILTERS.map(f => (
-          <button 
-            key={f.name}
-            onClick={() => setSearchText(f.name)}
-            style={{ 
-              padding: "8px 16px", borderRadius: "12px", border: "1px solid #eee", 
-              background: searchText.toLowerCase() === f.name.toLowerCase() ? "#0f172a" : "#fff",
-              color: searchText.toLowerCase() === f.name.toLowerCase() ? "#fff" : "#333",
-              fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.2s"
-            }}
-          >
-            {f.icon} {f.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Savings Calculator (Only shows when searching) */}
-      {searchText && results.length > 1 && (
-        <div style={{ padding: "0 16px 20px" }}>
-          <div style={{ background: "rgba(0,200,83,0.08)", borderRadius: "18px", padding: "20px", border: "1px solid rgba(0,200,83,0.2)" }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#00c853", marginBottom: 12 }}>💰 ESTIMATED SAVINGS</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 15 }}>
-              <span style={{ fontSize: 14 }}>Spend: $</span>
-              <input type="number" value={purchaseAmount} onChange={e => setPurchaseAmount(Number(e.target.value))} 
-                style={{ width: "80px", padding: "6px", borderRadius: "8px", border: "1px solid #ddd", fontWeight: 700, textAlign: "center" }} />
-            </div>
-            <div style={{ background: "#fff", borderRadius: "12px", padding: "15px", textAlign: "center", border: "1px solid #eee" }}>
-              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>You save an extra</div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: "#ff6600" }}>
-                ${((purchaseAmount * parseFloat(results[0].categories[currentCategory] || 1) / 100) - (purchaseAmount * parseFloat(results[1].categories[currentCategory] || 1) / 100)).toFixed(2)}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Card List */}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 15 }}>
         {results.map((card, i) => (
           <div key={card.id} style={{
@@ -133,9 +79,6 @@ export default function App() {
             transform: i === 0 && searchText ? "scale(1.02)" : "scale(1)",
             transition: "all 0.3s ease"
           }}>
-            {i === 0 && searchText && (
-              <div style={{ position: "absolute", top: -10, right: 20, background: "#00c853", color: "#fff", padding: "5px 15px", borderRadius: "10px", fontSize: 11, fontWeight: 900 }}>★ BEST FOR {currentCategory.toUpperCase()}</div>
-            )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7 }}>{card.issuer}</div>
