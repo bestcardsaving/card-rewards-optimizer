@@ -1,18 +1,26 @@
 import React, { useState, useEffect, useMemo } from "react";
 
+// This is your live database link
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTw7Eqlez9794Rm_bBc5_vBxQH8HQVjK9dgqPZNHeucbCpHB-UAZpmGXMBkF9Md1PEGt8sGy7OUYPV2/pub?output=csv";
 
-// --- THE INTELLIGENT CATEGORY MAPPER ---
+// These are the quick-tap buttons for your users
+const POPULAR_STORES = [
+  { name: "Walmart", icon: "🏪", category: "walmart" },
+  { name: "Target", icon: "🎯", category: "target" },
+  { name: "Amazon", icon: "📱", category: "amazon" },
+  { name: "Gas Station", icon: "⛽", category: "gas" },
+  { name: "Grocery", icon: "🛒", category: "grocery" },
+  { name: "Dining", icon: "☕", category: "dining" }
+];
+
+// This helper "reads" what the user types and picks the right category
 const mapSearchToCategory = (term) => {
   const t = term.toLowerCase();
-  
-  // Specific Store Overrides
   if (t.includes("walmart")) return "walmart";
   if (t.includes("target")) return "target";
   if (t.includes("amazon")) return "amazon";
-
-  // Category Logic (The "Infinite" Database)
-  const gasKeywords = ["gas", "fuel", "shell", "exxon", "mobil", "chevron", "speedway", "costco gas"];
+  
+  const gasKeywords = ["gas", "fuel", "shell", "exxon", "mobil", "chevron", "76", "costco gas"];
   const diningKeywords = ["dining", "restaurant", "food", "eat", "cafe", "starbucks", "mcdonald", "pizza", "chipotle", "subway"];
   const groceryKeywords = ["grocery", "market", "supermarket", "kroger", "publix", "aldi", "whole foods", "trader joe", "safeway"];
   
@@ -20,58 +28,16 @@ const mapSearchToCategory = (term) => {
   if (diningKeywords.some(k => t.includes(k))) return "dining";
   if (groceryKeywords.some(k => t.includes(k))) return "grocery";
   
-  return "all"; // Default to base cashback
+  return "all"; 
 };
-
-// --- UI COMPONENTS (PRESERVED) ---
-function SavingsCalc({ topRate, secondRate }) {
-  const [amount, setAmount] = useState(100);
-  const diff = ((amount * topRate / 100) - (amount * secondRate / 100)).toFixed(2);
-  return (
-    <div style={{ background: "rgba(0,200,83,0.06)", borderRadius: 14, padding: 18, border: "1px solid rgba(0,200,83,0.15)", marginTop: 16 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#00c853", textTransform: "uppercase", marginBottom: 10 }}>💰 Savings Calculator</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 13, color: "#888" }}>Spending: $</span>
-        <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} style={{ border: "none", background: "#f5f5f5", borderRadius: 8, padding: "4px 10px", width: 80, fontWeight: 700 }} />
-      </div>
-      <div style={{ textAlign: "center", background: "#fff", borderRadius: 10, padding: 10, border: "1px solid #e0e0e0" }}>
-        <div style={{ fontSize: 11, color: "#888" }}>Extra Savings Today</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#ff6600" }}>${diff}</div>
-      </div>
-    </div>
-  );
-}
-
-function CreditCard({ card, rate, isTop }) {
-  return (
-    <div style={{
-      background: `linear-gradient(135deg, ${card.color || '#1a4480'}, #1a1a1a)`,
-      borderRadius: 14, padding: "18px 20px", color: "#fff", position: "relative",
-      transform: isTop ? "scale(1)" : "scale(0.97)", opacity: isTop ? 1 : 0.85,
-      transition: "all 0.3s ease", marginBottom: 12, boxShadow: isTop ? "0 8px 32px rgba(0,0,0,0.3)" : "0 2px 8px rgba(0,0,0,0.15)"
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.8 }}>{card.issuer}</div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{card.name}</div>
-        </div>
-        <div style={{ background: "rgba(255,255,255,0.25)", borderRadius: 10, padding: "6px 14px", backdropFilter: "blur(10px)" }}>
-          <span style={{ fontSize: 26, fontWeight: 800 }}>{rate}%</span>
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <a href={card.applyLink} target="_blank" rel="noreferrer" style={{ background: "#fff", color: "#000", padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 800, textDecoration: "none" }}>APPLY NOW</a>
-      </div>
-      {isTop && <div style={{ position: "absolute", top: -1, right: 20, background: "#00c853", color: "#fff", padding: "4px 12px", borderRadius: "0 0 8px 8px", fontSize: 10, fontWeight: 800 }}>★ BEST PICK</div>}
-    </div>
-  );
-}
 
 export default function App() {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
+  const [purchaseAmount, setPurchaseAmount] = useState(100);
 
+  // Fetch your Google Sheet data
   useEffect(() => {
     fetch(CSV_URL).then(res => res.text()).then(text => {
       const rows = text.split('\n').slice(1);
@@ -79,7 +45,7 @@ export default function App() {
         const cols = row.split(',');
         return {
           id: cols[0], name: cols[1], issuer: cols[2], color: cols[3],
-          categories: { grocery: cols[4], dining: cols[5], gas: cols[6], target: cols[7], walmart: cols[8], amazon: cols[8] },
+          categories: { grocery: cols[4], dining: cols[5], gas: cols[6], target: cols[7], walmart: cols[8], amazon: cols[8], all: 1 },
           applyLink: cols[9]
         };
       }).filter(c => c.id);
@@ -88,37 +54,97 @@ export default function App() {
     });
   }, []);
 
+  const currentCategory = useMemo(() => mapSearchToCategory(searchText), [searchText]);
+
   const results = useMemo(() => {
     if (!searchText) return cards;
-    const cat = mapSearchToCategory(searchText);
-    return [...cards].sort((a, b) => (parseFloat(b.categories[cat]) || 1) - (parseFloat(a.categories[cat]) || 1));
-  }, [searchText, cards]);
+    return [...cards].sort((a, b) => (parseFloat(b.categories[currentCategory]) || 1) - (parseFloat(a.categories[currentCategory]) || 1));
+  }, [searchText, cards, currentCategory]);
 
-  if (loading) return <div style={{ textAlign: "center", padding: 50 }}>Syncing Rewards...</div>;
+  if (loading) return <div style={{ textAlign: "center", padding: 50, fontFamily: "sans-serif" }}>Syncing latest rewards...</div>;
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", background: "#fafafa", minHeight: "100vh", fontFamily: "sans-serif" }}>
-      <div style={{ background: "#1a1a2e", padding: "32px 20px", borderRadius: "0 0 28px 28px", color: "#fff" }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800 }}>Card Optimizer</h1>
-        <p style={{ opacity: 0.6, fontSize: 13 }}>Smart category matching for any store.</p>
+    <div style={{ maxWidth: 480, margin: "0 auto", background: "#fafafa", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: 40 }}>
+      {/* Blue Header */}
+      <div style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)", padding: "40px 20px", borderRadius: "0 0 30px 30px", color: "#fff", textAlign: "center" }}>
+        <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Card Optimizer</h1>
+        <p style={{ opacity: 0.7, fontSize: 14, marginTop: 8 }}>Maximize your cashback at every store.</p>
       </div>
 
-      <div style={{ padding: 16 }}>
-        <input style={{ width: "100%", padding: 16, borderRadius: 14, border: "1px solid #eee", boxShadow: "0 2px 12px rgba(0,0,0,0.06)", outline: "none" }}
-          placeholder="Where are you shopping? (e.g. Olive Garden)" value={searchText} onChange={e => setSearchText(e.target.value)} />
+      {/* Search Input */}
+      <div style={{ padding: "20px 16px" }}>
+        <input 
+          style={{ width: "100%", padding: "18px", borderRadius: "16px", border: "1px solid #ddd", boxShadow: "0 4px 15px rgba(0,0,0,0.05)", outline: "none", fontSize: 16 }}
+          placeholder="Where are you shopping? (e.g. Shell)" 
+          value={searchText} 
+          onChange={e => setSearchText(e.target.value)} 
+        />
       </div>
 
-      <div style={{ padding: 16 }}>
-        {results.map((card, i) => (
-          <CreditCard key={card.id} card={card} rate={parseFloat(card.categories[mapSearchToCategory(searchText)]) || 1} isTop={i === 0 && searchText !== ""} />
-        ))}
+      {/* Suggested Store Chips */}
+      <div style={{ padding: "0 16px 20px" }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#999", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.5px" }}>Popular Categories</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+          {POPULAR_STORES.map(s => (
+            <button 
+              key={s.name} 
+              onClick={() => setSearchText(s.name)} 
+              style={{ padding: "10px 16px", borderRadius: "50px", border: "1px solid #eee", background: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13, boxShadow: "0 2px 5px rgba(0,0,0,0.03)" }}
+            >
+              {s.icon} {s.name}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* Savings Calculator (Only shows when searching) */}
       {searchText && results.length > 1 && (
-        <div style={{ padding: "0 16px 24px" }}>
-          <SavingsCalc topRate={parseFloat(results[0].categories[mapSearchToCategory(searchText)])} secondRate={parseFloat(results[1].categories[mapSearchToCategory(searchText)])} />
+        <div style={{ padding: "0 16px 20px" }}>
+          <div style={{ background: "rgba(0,200,83,0.08)", borderRadius: "18px", padding: "20px", border: "1px solid rgba(0,200,83,0.2)" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#00c853", marginBottom: 12 }}>💰 SAVINGS CALCULATOR</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 15 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>Spending:</span>
+              <input type="number" value={purchaseAmount} onChange={e => setPurchaseAmount(Number(e.target.value))} 
+                style={{ width: "80px", padding: "6px", borderRadius: "8px", border: "1px solid #ddd", fontWeight: 700, textAlign: "center" }} />
+            </div>
+            <div style={{ background: "#fff", borderRadius: "12px", padding: "15px", textAlign: "center", border: "1px solid #eee" }}>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Extra Cash with Top Card</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: "#ff6600" }}>
+                ${((purchaseAmount * parseFloat(results[0].categories[currentCategory] || 1) / 100) - (purchaseAmount * parseFloat(results[1].categories[currentCategory] || 1) / 100)).toFixed(2)}
+              </div>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Card List */}
+      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 15 }}>
+        {results.map((card, i) => (
+          <div key={card.id} style={{
+            background: `linear-gradient(135deg, ${card.color || '#1a4480'}, #111)`,
+            borderRadius: "20px", padding: "22px", color: "#fff", position: "relative",
+            boxShadow: i === 0 && searchText ? "0 12px 30px rgba(0,0,0,0.25)" : "0 4px 10px rgba(0,0,0,0.1)",
+            transform: i === 0 && searchText ? "scale(1.02)" : "scale(1)",
+            transition: "all 0.3s ease"
+          }}>
+            {i === 0 && searchText && (
+              <div style={{ position: "absolute", top: -10, right: 20, background: "#00c853", color: "#fff", padding: "5px 15px", borderRadius: "10px", fontSize: 11, fontWeight: 900 }}>★ BEST CHOICE</div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, textTransform: "uppercase" }}>{card.issuer}</div>
+                <div style={{ fontSize: 18, fontWeight: 800 }}>{card.name}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: "12px", padding: "8px 15px", backdropFilter: "blur(5px)" }}>
+                <span style={{ fontSize: 28, fontWeight: 900 }}>{parseFloat(card.categories[currentCategory] || 1)}%</span>
+              </div>
+            </div>
+            <a href={card.applyLink} target="_blank" rel="noreferrer" style={{ background: "#fff", color: "#000", padding: "10px 20px", borderRadius: "10px", fontSize: 12, fontWeight: 900, textDecoration: "none", display: "inline-block" }}>
+              APPLY NOW
+            </a>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
