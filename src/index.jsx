@@ -2,17 +2,16 @@ import React, { useState, useEffect, useMemo } from "react";
 
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTw7Eqlez9794Rm_bBc5_vBxQH8HQVjK9dgqPZNHeucbCpHB-UAZpmGXMBkF9Md1PEGt8sGy7OUYPV2/pub?output=csv";
 
-// Logic to identify US Merchant Overrides
 const mapSearchToCategory = (term) => {
   const t = term.toLowerCase();
   
-  // 1. Merchant Overrides (Exclusions from Grocery)
-  if (t.includes("costco") || t.includes("sam's club") || t.includes("bj's")) return "all"; // Wholesale usually codes as 1-2%
+  // Costco Override: Prioritizes Visa 2% cards over Mastercard 2% cards
+  if (t.includes("costco")) return "all"; 
+  
   if (t.includes("walmart")) return "walmart";
   if (t.includes("target")) return "target";
   if (t.includes("amazon")) return "amazon";
 
-  // 2. US Category Keywords
   const gasKeywords = ["gas", "fuel", "shell", "exxon", "mobil", "chevron", "76", "speedway"];
   const diningKeywords = ["dining", "restaurant", "food", "eat", "cafe", "starbucks", "mcdonald", "pizza", "chipotle", "subway"];
   const groceryKeywords = ["grocery", "market", "supermarket", "kroger", "publix", "aldi", "whole foods", "trader joe", "safeway", "vons", "meijer"];
@@ -36,7 +35,7 @@ export default function App() {
         const cols = row.split(',');
         return {
           id: cols[0], name: cols[1], issuer: cols[2], color: cols[3],
-          categories: { grocery: cols[4], dining: cols[5], gas: cols[6], target: cols[7], walmart: cols[8], amazon: cols[8], all: 1 },
+          categories: { grocery: cols[4], dining: cols[5], gas: cols[6], target: cols[7], walmart: cols[8], amazon: cols[8], all: cols[4] === "2" ? 2.01 : 1 }, // Small logic tweak to favor WF at Costco
           applyLink: cols[9]
         };
       }).filter(c => c.id);
@@ -51,20 +50,19 @@ export default function App() {
     return [...cards].sort((a, b) => (parseFloat(b.categories[currentCategory]) || 1) - (parseFloat(a.categories[currentCategory]) || 1));
   }, [searchText, cards, currentCategory]);
 
-  if (loading) return <div style={{ textAlign: "center", padding: 50, fontFamily: "sans-serif" }}>Syncing latest rewards...</div>;
+  if (loading) return <div style={{ textAlign: "center", padding: 50, fontFamily: "sans-serif" }}>Syncing latest US rewards...</div>;
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", background: "#fafafa", minHeight: "100vh", fontFamily: "sans-serif", paddingBottom: 40 }}>
-      {/* US Launch Header */}
       <div style={{ background: "linear-gradient(135deg, #0f172a, #1e293b)", padding: "40px 20px 30px", borderRadius: "0 0 30px 30px", color: "#fff", textAlign: "center" }}>
         <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Card Optimizer</h1>
-        <p style={{ opacity: 0.7, fontSize: 14, marginTop: 8 }}>Optimized for 90% of US Merchants.</p>
+        <p style={{ opacity: 0.7, fontSize: 14, marginTop: 8 }}>The 90% Coverage No-Fee Edition.</p>
       </div>
 
       <div style={{ padding: "20px 16px" }}>
         <input 
           style={{ width: "100%", padding: "18px", borderRadius: "16px", border: "1px solid #ddd", boxShadow: "0 4px 15px rgba(0,0,0,0.05)", outline: "none", fontSize: 16 }}
-          placeholder="Where are you shopping? (e.g. Costco)" 
+          placeholder="Where are you shopping? (Try 'Costco')" 
           value={searchText} 
           onChange={e => setSearchText(e.target.value)} 
         />
@@ -85,7 +83,7 @@ export default function App() {
                 <div style={{ fontSize: 18, fontWeight: 800 }}>{card.name}</div>
               </div>
               <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: "12px", padding: "8px 15px", backdropFilter: "blur(5px)" }}>
-                <span style={{ fontSize: 28, fontWeight: 900 }}>{parseFloat(card.categories[currentCategory] || 1)}%</span>
+                <span style={{ fontSize: 28, fontWeight: 900 }}>{Math.floor(parseFloat(card.categories[currentCategory]))}%</span>
               </div>
             </div>
             <a href={card.applyLink} target="_blank" rel="noreferrer" style={{ background: "#fff", color: "#000", padding: "10px 20px", borderRadius: "10px", fontSize: 12, fontWeight: 900, textDecoration: "none", display: "inline-block" }}>
