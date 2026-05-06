@@ -737,8 +737,42 @@ export default function App() {
       {/* ─ MY CARDS ─ */}
       {screen === "manage" && (
         <div style={{ padding:"16px 15px 0" }}>
-          <div style={{ fontSize:16, fontWeight:800, color:"#1a2744", marginBottom:4 }}>My Cards</div>
-          <div style={{ fontSize:12, color:"#8896AA", marginBottom:16 }}>Toggle the cards you own. Only selected cards are compared.</div>
+          {/* Header row with Select All / Unselect All */}
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:4 }}>
+            <div style={{ fontSize:16, fontWeight:800, color:"#1a2744" }}>My Cards</div>
+            <div style={{ display:"flex", gap:6, flexShrink:0, marginLeft:10 }}>
+              <button
+                onClick={() => setUserCardIds(cards.map(c => c.card_id))}
+                style={{
+                  background: userCardIds.length === cards.length ? "#E8ECF2" : "#1A3A6B",
+                  color: userCardIds.length === cards.length ? "#8896AA" : "#fff",
+                  border: "none", borderRadius:8, padding:"5px 10px",
+                  fontSize:11, fontWeight:700, cursor:"pointer",
+                  fontFamily:"'DM Sans',sans-serif", whiteSpace:"nowrap",
+                  opacity: userCardIds.length === cards.length ? 0.5 : 1,
+                }}
+              >
+                Select all
+              </button>
+              <button
+                onClick={() => setUserCardIds([])}
+                style={{
+                  background: userCardIds.length === 0 ? "#E8ECF2" : "#fff",
+                  color: userCardIds.length === 0 ? "#8896AA" : "#E24B4A",
+                  border: `1.5px solid ${userCardIds.length === 0 ? "#E8ECF2" : "#FECACA"}`,
+                  borderRadius:8, padding:"5px 10px",
+                  fontSize:11, fontWeight:700, cursor:"pointer",
+                  fontFamily:"'DM Sans',sans-serif", whiteSpace:"nowrap",
+                  opacity: userCardIds.length === 0 ? 0.5 : 1,
+                }}
+              >
+                Unselect all
+              </button>
+            </div>
+          </div>
+          <div style={{ fontSize:12, color:"#8896AA", marginBottom:16 }}>
+            {userCardIds.length} of {cards.length} cards selected
+          </div>
           {issuers.map(issuer => (
             <div key={issuer} style={{ marginBottom:18 }}>
               <div style={{ fontSize:11, fontWeight:800, color:"#8896AA", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:8 }}>{issuer}</div>
