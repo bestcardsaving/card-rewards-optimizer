@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Analytics } from '@vercel/analytics/react';
 
 // ─── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────────────
 const CARDS_SHEET_ID  = "19xS4tywFSnMAjbSlwlsLCQRD_r08NlQq9YtJxl4wdL4";
@@ -818,13 +819,15 @@ export default function App() {
       </div>
 
       {/* ─ CATEGORY MODAL ─ */}
-      {showCatModal && (
+     {showCatModal && (
         <CategoryPickerModal
           storeName={selStore?.store_name || query}
           onPick={pickCat}
           onClose={() => setShowCatModal(false)}
         />
       )}
+
+      <Analytics />
     </div>
   );
 }
