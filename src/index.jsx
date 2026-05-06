@@ -3,201 +3,155 @@ import { useState, useEffect, useCallback } from "react";
 // ─── GOOGLE SHEETS CONFIG ────────────────────────────────────────────────────
 const CARDS_SHEET_ID  = "19xS4tywFSnMAjbSlwlsLCQRD_r08NlQq9YtJxl4wdL4";
 const STORES_SHEET_ID = "1htq_G6Wa2BTERsY2x7TWFmbd0eiQbNgbPuU73x2soik";
-const CSV = (id) => `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`;
+const CSV = (id) =>
+  `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`;
 
-// ─── CATEGORY COLUMN MAP ─────────────────────────────────────────────────────
+// ─── CATEGORY → COLUMN MAPPING ───────────────────────────────────────────────
 const CAT_COL = {
-  dining:"dining_rate", grocery:"grocery_rate", gas:"gas_rate",
-  drugstore:"drugstore_rate", online_retail:"online_retail_rate",
-  streaming:"streaming_rate", travel:"travel_rate",
-  home_improvement:"home_improvement_rate", wholesale:"wholesale_rate",
-  transit:"transit_rate", entertainment:"entertainment_rate",
-  retail:null, electronics:null, automotive:null, fitness:null,
+  dining:           "dining_rate",
+  grocery:          "grocery_rate",
+  gas:              "gas_rate",
+  drugstore:        "drugstore_rate",
+  online_retail:    "online_retail_rate",
+  streaming:        "streaming_rate",
+  travel:           "travel_rate",
+  home_improvement: "home_improvement_rate",
+  wholesale:        "wholesale_rate",
+  transit:          "transit_rate",
+  entertainment:    "entertainment_rate",
 };
 
-// ─── KEYWORD DETECTOR ────────────────────────────────────────────────────────
-const KW = [
-  {c:"dining",      w:["restaurant","grill","pizza","burger","taco","sushi","bistro","cafe","diner","kitchen","eatery","bbq","wings","deli","noodle","ramen","thai","chinese","mexican","italian","steakhouse","smokehouse","brewery","donut","bagel","sandwich","sub","seafood","boba","smoothie"]},
-  {c:"grocery",     w:["grocery","supermarket","market","fresh","organic","food","natural","produce","foods","meats","bakery"]},
-  {c:"gas",         w:["gas","fuel","petrol","station","exxon","shell","chevron","bp","mobil","sunoco","marathon","speedway","circle k","wawa","sheetz","kwiktrip","casey"]},
-  {c:"drugstore",   w:["pharmacy","drug","cvs","walgreen","rite aid","duane reade"]},
-  {c:"online_retail",w:["amazon","online",".com","ebay","etsy","wayfair","shopify"]},
-  {c:"streaming",   w:["netflix","spotify","hulu","disney","paramount","peacock","hbo","youtube","tidal","pandora","streaming"]},
-  {c:"home_improvement",w:["home depot","lowes","lowe's","menards","hardware","lumber","flooring","paint","furniture","ikea","ashley","pottery barn","ace hardware"]},
-  {c:"travel",      w:["hotel","motel","airbnb","airline","flight","airport","car rental","hertz","avis","enterprise","marriott","hilton","hyatt","delta","united","southwest"]},
-  {c:"transit",     w:["uber","lyft","taxi","metro","bus","train","amtrak","transit","rideshare","parking","toll"]},
-  {c:"entertainment",w:["theater","cinema","movie","amc","regal","cinemark","concert","ticketmaster","arcade","bowling","golf","escape room","museum","zoo","aquarium","theme park","six flags","universal"]},
-  {c:"fitness",     w:["gym","fitness","planet fitness","la fitness","ymca","crossfit","pilates","yoga","orange theory","crunch","equinox"]},
-  {c:"wholesale",   w:["costco","sams club","sam's club","bjs","wholesale","bulk"]},
+// ─── CATEGORY LABELS (for picker) ────────────────────────────────────────────
+const CATEGORIES = [
+  { id: "dining",           label: "🍽️ Dining",           desc: "Restaurants, fast food, cafes" },
+  { id: "grocery",          label: "🛒 Grocery",          desc: "Supermarkets, food stores" },
+  { id: "gas",              label: "⛽ Gas",               desc: "Gas stations, fuel" },
+  { id: "drugstore",        label: "💊 Drugstore",        desc: "CVS, Walgreens, pharmacies" },
+  { id: "online_retail",    label: "📦 Online Retail",    desc: "Amazon, online shopping" },
+  { id: "wholesale",        label: "🏪 Wholesale Club",   desc: "Costco, Sam's Club, BJ's" },
+  { id: "home_improvement", label: "🔨 Home Improvement", desc: "Home Depot, Lowe's" },
+  { id: "streaming",        label: "📺 Streaming",        desc: "Netflix, Spotify, Disney+" },
+  { id: "entertainment",    label: "🎬 Entertainment",    desc: "Movies, concerts, events" },
+  { id: "travel",           label: "✈️ Travel",           desc: "Hotels, flights, car rental" },
+  { id: "transit",          label: "🚇 Transit",          desc: "Uber, Lyft, public transport" },
+  { id: "gas",              label: "🛍️ General Retail",   desc: "Department stores, clothing" },
 ];
 
-function detectCat(name) {
-  const l = name.toLowerCase();
-  for (const {c,w} of KW) if (w.some(k=>l.includes(k))) return c;
+// ─── KEYWORD AUTO-DETECT ─────────────────────────────────────────────────────
+const KW_MAP = [
+  { c: "dining",           w: ["restaurant","grill","pizza","burger","taco","sushi","cafe","diner","kitchen","bbq","wings","deli","noodle","ramen","thai","chinese","mexican","steakhouse","chipotle","mcdonald","subway","panera","starbucks","chick-fil","olive garden","applebee","chili","ihop","waffle","dunkin","domino","popeye","wendy","arby","sonic"] },
+  { c: "grocery",          w: ["grocery","supermarket","market","food lion","kroger","publix","wegman","whole food","trader joe","aldi","safeway","stop & shop","giant","heb","meijer","winn-dixie","fresh","sprout","natural grocers","lidl"] },
+  { c: "gas",              w: ["gas","fuel","shell","exxon","bp","chevron","mobil","sunoco","marathon","phillips 66","valero","speedway","wawa","sheetz","racetrac","circle k","quik trip","qt"] },
+  { c: "drugstore",        w: ["cvs","walgreen","rite aid","pharmacy","drug"] },
+  { c: "wholesale",        w: ["costco","sam's club","bj's wholesale","bj wholesale"] },
+  { c: "online_retail",    w: ["amazon","ebay","etsy","wish","shopify","online"] },
+  { c: "home_improvement", w: ["home depot","lowe's","lowes","ace hardware","menards","harbor freight","fastenal"] },
+  { c: "streaming",        w: ["netflix","spotify","hulu","disney","hbo","peacock","paramount","apple tv","youtube premium","pandora","tidal"] },
+  { c: "entertainment",    w: ["cinema","movie","amc","regal","theater","theatre","concert","ticketmaster","stubhub","live nation","bowling","arcade","dave & buster"] },
+  { c: "travel",           w: ["hotel","motel","marriott","hilton","hyatt","ihg","airbnb","vrbo","airline","delta","united","american airlines","southwest","hertz","enterprise","avis","budget rent"] },
+  { c: "transit",          w: ["uber","lyft","taxi","metro","mta","transit","bart","wmata","septa","mbta"] },
+];
+
+function detectCategory(name) {
+  const n = name.toLowerCase();
+  for (const { c, w } of KW_MAP) {
+    if (w.some(kw => n.includes(kw))) return c;
+  }
   return null;
 }
 
 // ─── CSV PARSER ───────────────────────────────────────────────────────────────
 function parseCSV(text) {
   const lines = text.trim().split("\n");
-  const headers = lines[0].split(",").map(h=>h.trim().replace(/^"|"$/g,""));
-  return lines.slice(1).map(line=>{
-    const vals=[]; let cur=""; let inQ=false;
-    for(const ch of line){
-      if(ch==='"'){inQ=!inQ;}
-      else if(ch===","&&!inQ){vals.push(cur.trim());cur="";}
-      else cur+=ch;
+  const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, "").toLowerCase().replace(/ /g,"_"));
+  return lines.slice(1).map(line => {
+    const vals = [];
+    let cur = "", inQ = false;
+    for (const ch of line) {
+      if (ch === '"') inQ = !inQ;
+      else if (ch === "," && !inQ) { vals.push(cur); cur = ""; }
+      else cur += ch;
     }
-    vals.push(cur.trim());
-    return Object.fromEntries(headers.map((h,i)=>[h,(vals[i]||"").replace(/^"|"$/g,"")]));
-  }).filter(r=>["yes","true","TRUE","1"].includes(r.active));
+    vals.push(cur);
+    return Object.fromEntries(headers.map((h, i) => [h, (vals[i] || "").trim().replace(/^"|"$/g, "")]));
+  });
 }
 
-// ─── RATE LOGIC ──────────────────────────────────────────────────────────────
-function getRate(card, storeName, cat, q2) {
-  if(q2 && card.rotating_q2_stores && parseFloat(card.rotating_q2_2026)>0){
-    const rot = card.rotating_q2_stores.split(",").map(s=>s.trim().toLowerCase());
-    const n = storeName.toLowerCase();
-    if(rot.some(r=>n.includes(r)||r.includes(n))) return parseFloat(card.rotating_q2_2026);
-  }
-  const col = CAT_COL[cat];
-  if(col && parseFloat(card[col])>0) return parseFloat(card[col]);
-  return parseFloat(card.base_rate)||1;
-}
-
-function rankCards(cards, storeName, cat, selectedIds, q2) {
-  return cards
-    .filter(c=>selectedIds.includes(c.card_id))
-    .map(c=>({card:c, rate:getRate(c,storeName,cat,q2), isBoost:getRate(c,storeName,cat,q2)>parseFloat(c.base_rate)}))
-    .sort((a,b)=>b.rate-a.rate);
-}
-
-function get2PctCards(cards) {
-  return cards.filter(c=>parseFloat(c.base_rate)>=2&&(c.annual_fee==="0"||c.annual_fee===""));
-}
-
-// ─── MANUAL CATEGORIES ───────────────────────────────────────────────────────
-const CATS = [
-  {id:"dining",icon:"🍽️",label:"Dining"},
-  {id:"grocery",icon:"🛒",label:"Grocery"},
-  {id:"gas",icon:"⛽",label:"Gas Station"},
-  {id:"drugstore",icon:"💊",label:"Drugstore"},
-  {id:"online_retail",icon:"📦",label:"Online Shopping"},
-  {id:"retail",icon:"🏬",label:"General Retail"},
-  {id:"home_improvement",icon:"🔨",label:"Home Improvement"},
-  {id:"streaming",icon:"🎬",label:"Streaming"},
-  {id:"travel",icon:"✈️",label:"Travel / Hotel"},
-  {id:"transit",icon:"🚗",label:"Rideshare / Transit"},
-  {id:"entertainment",icon:"🎭",label:"Entertainment"},
-  {id:"fitness",icon:"💪",label:"Gym / Fitness"},
-  {id:"electronics",icon:"🖥️",label:"Electronics"},
-  {id:"wholesale",icon:"📦",label:"Warehouse / Wholesale"},
-  {id:"automotive",icon:"🚙",label:"Auto Parts"},
-];
-
-const STORE_CATS = [
-  {label:"Retail & Warehouse",  icon:"🏬", filter:["retail","wholesale","electronics","automotive"]},
-  {label:"Grocery",             icon:"🛒", filter:["grocery"]},
-  {label:"Gas Stations",        icon:"⛽", filter:["gas"]},
-  {label:"Dining",              icon:"🍽️", filter:["dining"]},
-  {label:"Drugstores",          icon:"💊", filter:["drugstore"]},
-  {label:"Home Improvement",    icon:"🔨", filter:["home_improvement"]},
-  {label:"Streaming & Fun",     icon:"🎬", filter:["streaming","entertainment","fitness"]},
-  {label:"Travel & Transit",    icon:"✈️", filter:["travel","transit"]},
-];
-
-// ─── CREDIT CARD VISUAL ───────────────────────────────────────────────────────
-function CreditCardUI({ card, rate, rank, isBoost }) {
-  const col  = card.card_color  || "#1a3a6b";
-  const acc  = card.card_accent || "#4a90d9";
-  const grad = `linear-gradient(135deg, ${col} 0%, ${col}dd 55%, ${col}bb 100%)`;
+// ─── CATEGORY PICKER MODAL ────────────────────────────────────────────────────
+function CategoryPickerModal({ storeName, onPick, onClose }) {
   return (
     <div style={{
-      background: grad, borderRadius: 18, padding: rank===0 ? "22px 20px 18px" : "15px 18px",
-      position:"relative", overflow:"hidden",
-      boxShadow: rank===0 ? `0 12px 40px ${col}55, 0 2px 8px rgba(0,0,0,0.12)` : "0 2px 12px rgba(0,0,0,0.1)",
-      border: rank===0 ? `2px solid ${acc}55` : "1.5px solid rgba(255,255,255,0.15)",
-      transform: rank===0 ? "scale(1.01)" : "scale(1)",
-      transition:"all .2s",
-    }}>
-      {/* Decorative circles */}
-      <div style={{position:"absolute",top:-50,right:-50,width:160,height:160,borderRadius:"50%",background:"rgba(255,255,255,0.07)"}}/>
-      <div style={{position:"absolute",bottom:-40,left:-30,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,0.04)"}}/>
-
-      {rank===0 && (
-        <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",background:acc,color:"#000",fontSize:9,fontWeight:900,letterSpacing:"0.14em",padding:"3px 16px 5px",borderRadius:"0 0 10px 10px",textTransform:"uppercase",whiteSpace:"nowrap",zIndex:2}}>
-          ★ BEST PICK
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(10,18,40,0.55)", backdropFilter: "blur(6px)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: "20px 20px 0 0",
+        padding: "0 0 32px", width: "100%", maxWidth: 480,
+        maxHeight: "80vh", overflowY: "auto",
+        boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+      }}>
+        {/* Handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 0" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: "#E0E6F0" }} />
         </div>
-      )}
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginTop:rank===0?10:0,position:"relative",zIndex:1}}>
-        <div>
-          <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.5)",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3}}>{card.issuer}</div>
-          <div style={{fontSize:rank===0?17:14,fontWeight:800,color:"#fff",lineHeight:1.2}}>{card.card_name}</div>
-          <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:3}}>
-            {card.annual_fee==="0"||card.annual_fee===""?"No annual fee":`$${card.annual_fee}/yr`}
+        {/* Header */}
+        <div style={{ padding: "16px 20px 12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#1a2744", fontFamily: "'DM Sans',sans-serif" }}>
+                What type of store is this?
+              </div>
+              {storeName && (
+                <div style={{ fontSize: 13, color: "#8896AA", marginTop: 3, fontFamily: "'DM Sans',sans-serif" }}>
+                  "{storeName}" isn't in our database yet
+                </div>
+              )}
+            </div>
+            <button onClick={onClose} style={{
+              background: "#F4F6F9", border: "none", borderRadius: 8,
+              width: 32, height: 32, cursor: "pointer", fontSize: 16,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>✕</button>
+          </div>
+          <div style={{ fontSize: 12, color: "#BBC5D5", marginTop: 6, fontFamily: "'DM Sans',sans-serif" }}>
+            Pick a category and we'll show the best card to use
           </div>
         </div>
-        <div style={{background:"rgba(0,0,0,0.3)",backdropFilter:"blur(10px)",borderRadius:12,padding:"8px 14px",border:"1px solid rgba(255,255,255,0.15)",textAlign:"center",flexShrink:0}}>
-          <div style={{fontSize:rank===0?30:24,fontWeight:900,color:rank===0?acc:"#fff",lineHeight:1}}>{rate}%</div>
-          <div style={{fontSize:8,color:"rgba(255,255,255,0.5)",letterSpacing:"0.08em",marginTop:1}}>BACK</div>
-        </div>
-      </div>
 
-      <div style={{marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center",position:"relative",zIndex:1}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          {/* Chip */}
-          <div style={{width:28,height:20,borderRadius:4,background:"linear-gradient(135deg,#e8d5a3,#c9a84c)",border:"1px solid rgba(0,0,0,0.15)"}}/>
-          <div style={{fontSize:11,fontFamily:"monospace",color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em"}}>•••• ••••</div>
-        </div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:"flex-end"}}>
-          {isBoost && <span style={{fontSize:9,fontWeight:800,background:`${acc}30`,color:acc,padding:"3px 8px",borderRadius:5,border:`1px solid ${acc}44`}}>🔥 BONUS</span>}
-          {card.special_tag && <span style={{fontSize:9,fontWeight:800,background:`${acc}30`,color:acc,padding:"3px 8px",borderRadius:5,border:`1px solid ${acc}44`}}>{card.special_tag}</span>}
-        </div>
-      </div>
-
-      {rank===0 && card.note && (
-        <div style={{marginTop:10,fontSize:12,color:"rgba(255,255,255,0.65)",lineHeight:1.5,background:"rgba(0,0,0,0.18)",borderRadius:10,padding:"8px 12px",position:"relative",zIndex:1}}>
-          {card.note}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── STORE CHIP ───────────────────────────────────────────────────────────────
-function StoreChip({ store, onClick }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button onClick={onClick}
-      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{display:"flex",alignItems:"center",gap:6,background:hov?"#EEF4FF":"#F4F6F9",border:`1.5px solid ${hov?"#4A90D9":"#E8ECF2"}`,borderRadius:50,padding:"9px 16px",cursor:"pointer",fontSize:13,fontWeight:600,color:"#1a2744",fontFamily:"'DM Sans',sans-serif",transition:"all .18s",transform:hov?"translateY(-1px)":"none",boxShadow:hov?"0 4px 12px rgba(74,144,217,0.15)":"0 1px 3px rgba(0,0,0,0.05)"}}>
-      <span style={{fontSize:16}}>{store.icon}</span>
-      <span>{store.store_name}</span>
-    </button>
-  );
-}
-
-// ─── CATEGORY MODAL ───────────────────────────────────────────────────────────
-function CatModal({ storeName, onPick, onClose }) {
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div style={{background:"#fff",borderRadius:"24px 24px 0 0",padding:"28px 20px 40px",width:"100%",maxWidth:480,boxShadow:"0 -8px 40px rgba(0,0,0,0.15)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
-          <div>
-            <div style={{fontSize:16,fontWeight:800,color:"#1a2744"}}>What type of store is this?</div>
-            <div style={{fontSize:12,color:"#8896AA",marginTop:3}}>"{storeName}" — pick the category to find your best card</div>
-          </div>
-          <button onClick={onClose} style={{background:"#F4F6F9",border:"none",borderRadius:8,width:30,height:30,cursor:"pointer",color:"#8896AA",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,maxHeight:"55vh",overflowY:"auto"}}>
-          {CATS.map(cat=>(
-            <button key={cat.id} onClick={()=>onPick(cat.id)}
-              style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",background:"#F8FAFC",border:"1.5px solid #E8ECF2",borderRadius:12,cursor:"pointer",textAlign:"left",color:"#1a2744",fontFamily:"'DM Sans',sans-serif",transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background="#EEF4FF";e.currentTarget.style.borderColor="#4A90D9";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#F8FAFC";e.currentTarget.style.borderColor="#E8ECF2";}}>
-              <span style={{fontSize:20}}>{cat.icon}</span>
-              <span style={{fontSize:12,fontWeight:600,lineHeight:1.3}}>{cat.label}</span>
+        {/* Category grid */}
+        <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {[
+            { id: "dining",           label: "🍽️ Dining",           desc: "Restaurants, fast food, cafes" },
+            { id: "grocery",          label: "🛒 Grocery",          desc: "Supermarkets, food stores" },
+            { id: "gas",              label: "⛽ Gas",               desc: "Gas stations, fuel" },
+            { id: "drugstore",        label: "💊 Drugstore",        desc: "CVS, Walgreens, pharmacies" },
+            { id: "online_retail",    label: "📦 Online Retail",    desc: "Amazon, online shopping" },
+            { id: "wholesale",        label: "🏪 Wholesale Club",   desc: "Costco, Sam's Club, BJ's" },
+            { id: "home_improvement", label: "🔨 Home Improvement", desc: "Home Depot, Lowe's" },
+            { id: "streaming",        label: "📺 Streaming",        desc: "Netflix, Spotify, Disney+" },
+            { id: "entertainment",    label: "🎬 Entertainment",    desc: "Movies, concerts, events" },
+            { id: "travel",           label: "✈️ Travel",           desc: "Hotels, flights, car rental" },
+            { id: "transit",          label: "🚇 Transit",          desc: "Uber, Lyft, public transport" },
+          ].map(cat => (
+            <button key={cat.id} onClick={() => onPick(cat.id)} style={{
+              display: "flex", alignItems: "center", gap: 14,
+              background: "#F8FAFF", border: "1.5px solid #E8ECF2",
+              borderRadius: 14, padding: "13px 16px", cursor: "pointer",
+              textAlign: "left", transition: "all .15s", fontFamily: "'DM Sans',sans-serif",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#EEF4FF"; e.currentTarget.style.borderColor = "#C8DEFF"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#F8FAFF"; e.currentTarget.style.borderColor = "#E8ECF2"; }}
+            >
+              <span style={{ fontSize: 22 }}>{cat.label.split(" ")[0]}</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2744" }}>
+                  {cat.label.split(" ").slice(1).join(" ")}
+                </div>
+                <div style={{ fontSize: 11, color: "#8896AA", marginTop: 1 }}>{cat.desc}</div>
+              </div>
+              <div style={{ marginLeft: "auto", color: "#BBC5D5", fontSize: 16 }}>›</div>
             </button>
           ))}
         </div>
@@ -206,373 +160,573 @@ function CatModal({ storeName, onPick, onClose }) {
   );
 }
 
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
-export default function App() {
-  const [screen,        setScreen]        = useState("home");
-  const [allCards,      setAllCards]      = useState([]);
-  const [allStores,     setAllStores]     = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [loadError,     setLoadError]     = useState(false);
-  const [search,        setSearch]        = useState("");
-  const [selStore,      setSelStore]      = useState(null);
-  const [selCat,        setSelCat]        = useState(null);
-  const [showCatModal,  setShowCatModal]  = useState(false);
-  const [results,       setResults]       = useState([]);
-  const [cardIds,       setCardIds]       = useState([]);
-  const [amount,        setAmount]        = useState(100);
-  const [animIn,        setAnimIn]        = useState(false);
-  const [lastSync,      setLastSync]      = useState(null);
-  const q2 = true;
+// ─── SAVINGS CALCULATOR ───────────────────────────────────────────────────────
+function SavingsCalc({ topRate, topName, secondRate, secondName }) {
+  const [rawVal, setRawVal] = useState("100");
+  const amount = parseFloat(rawVal) || 0;
 
-  const loadData = useCallback(async()=>{
-    setLoading(true); setLoadError(false);
-    try {
-      const [cr,sr] = await Promise.all([fetch(CSV(CARDS_SHEET_ID)),fetch(CSV(STORES_SHEET_ID))]);
-      const cards  = parseCSV(await cr.text());
-      const stores = parseCSV(await sr.text());
-      setAllCards(cards); setAllStores(stores);
-      const noFee = cards.filter(c=>c.annual_fee==="0"||c.annual_fee==="").map(c=>c.card_id);
-      const saved = localStorage.getItem("ss_cards_v3");
-      setCardIds(saved ? JSON.parse(saved) : noFee);
-      setLastSync(new Date());
-    } catch(e){ setLoadError(true); }
-    finally{ setLoading(false); }
-  },[]);
-
-  useEffect(()=>{loadData();},[loadData]);
-  useEffect(()=>{ if(cardIds.length) localStorage.setItem("ss_cards_v3",JSON.stringify(cardIds)); },[cardIds]);
-
-  const userCards = allCards.filter(c=>cardIds.includes(c.card_id));
-  const twoPct    = get2PctCards(allCards);
-  const userHas2  = twoPct.some(c=>cardIds.includes(c.card_id));
-  const topRate   = results[0]?.rate||0;
-
-  function doResults(store, cat){
-    const r = rankCards(allCards, store.store_name, cat, cardIds, q2);
-    setResults(r); setAnimIn(false); setTimeout(()=>setAnimIn(true),60);
-  }
-
-  function selectStore(store){
-    setSelStore(store); setSelCat(store.category);
-    doResults(store, store.category); setScreen("results");
-  }
-
-  function handleUnknown(name){
-    const det = detectCat(name);
-    const fake = {store_name:name,icon:"🏪",category:det||"retail"};
-    setSelStore(fake); setSearch("");
-    if(det){ setSelCat(det); doResults(fake,det); setScreen("results"); }
-    else { setShowCatModal(true); }
-  }
-
-  function pickCat(cat){
-    setShowCatModal(false); setSelCat(cat);
-    doResults(selStore, cat); setScreen("results");
-  }
-
-  function goHome(){ setScreen("home"); setSearch(""); setSelStore(null); setResults([]); }
-
-  const sl = search.toLowerCase();
-  const filtStores = search
-    ? allStores.filter(s=>s.store_name.toLowerCase().includes(sl)||(s.keywords||"").toLowerCase().includes(sl))
-    : allStores;
-
-  // ── GLOBAL STYLES injected once ──────────────────────────────────────────
-  const globalStyles = `
-    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-    body,html,#root{margin:0;padding:0;background:#F0F4FA;min-height:100vh;}
-    input::placeholder{color:#BBC5D5}
-    input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none}
-    ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#D0D7E3;border-radius:2px}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-  `;
-
-  // ── LOADING ──
-  if(loading) return(
-    <div style={{minHeight:"100vh",background:"#F0F4FA",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,fontFamily:"'DM Sans',sans-serif"}}>
-      <style>{globalStyles}</style>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet"/>
-      <div style={{width:40,height:40,border:"3px solid #E0E8F4",borderTop:"3px solid #4A90D9",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-      <div style={{color:"#8896AA",fontSize:13,fontWeight:500}}>Syncing card data…</div>
-    </div>
-  );
-
-  if(loadError) return(
-    <div style={{minHeight:"100vh",background:"#F0F4FA",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,padding:24,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
-      <style>{globalStyles}</style>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet"/>
-      <div style={{fontSize:40}}>⚠️</div>
-      <div style={{color:"#1a2744",fontSize:16,fontWeight:800}}>Couldn't load card data</div>
-      <div style={{color:"#8896AA",fontSize:13,maxWidth:280,lineHeight:1.6}}>Make sure both Google Sheets are shared:<br/><strong>Share → Anyone with the link → Viewer</strong></div>
-      <button onClick={loadData} style={{background:"#4A90D9",border:"none",borderRadius:14,padding:"13px 32px",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:"0 4px 16px rgba(74,144,217,0.3)"}}>Try Again</button>
-    </div>
-  );
+  const topEarns   = (amount * topRate   / 100).toFixed(2);
+  const secEarns   = (amount * secondRate / 100).toFixed(2);
+  const extraVs2pct = Math.max(0, amount * topRate / 100 - amount * 2 / 100).toFixed(2);
+  const extraVsSec  = Math.max(0, amount * topRate / 100 - amount * secondRate / 100).toFixed(2);
 
   return (
-    <div style={{minHeight:"100vh",background:"#F0F4FA",fontFamily:"'DM Sans',sans-serif",color:"#1a2744"}}>
-      <style>{globalStyles}</style>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700;9..40,800;9..40,900&display=swap" rel="stylesheet"/>
+    <div style={{
+      background: "#fff", border: "1.5px solid #E8ECF2", borderRadius: 16,
+      padding: "16px 16px 14px", marginBottom: 14,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: "#4A90D9", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12, fontFamily: "'DM Sans',sans-serif" }}>
+        💰 Savings Calculator
+      </div>
 
-      {/* ══════════════ HOME ══════════════ */}
-      {screen==="home" && (
-        <div style={{paddingBottom:90}}>
-          {/* Header */}
-          <div style={{background:"linear-gradient(135deg,#1a2744 0%,#1A3A6B 60%,#1e4a8a 100%)",padding:"48px 20px 32px",borderRadius:"0 0 28px 28px",boxShadow:"0 8px 32px rgba(26,39,68,0.2)"}}>
-            <div style={{maxWidth:480,margin:"0 auto"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24}}>
-                <div>
-                  <div style={{fontSize:10,fontWeight:700,color:"#67B0FF",letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>SWIPE SMART</div>
-                  <h1 style={{fontSize:28,fontWeight:900,color:"#fff",margin:0,lineHeight:1.1,letterSpacing:"-0.02em"}}>Best Card<br/>Any Store</h1>
-                  <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:7}}>
-                    {userCards.length} cards · {allStores.length} stores
-                    {lastSync&&<span style={{marginLeft:5}}>· {lastSync.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</span>}
-                  </div>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
-                  <button onClick={()=>setScreen("manage")} style={{background:"rgba(255,255,255,0.15)",border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:12,padding:"9px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",backdropFilter:"blur(8px)",whiteSpace:"nowrap"}}>
-                    💳 {userCards.length} Cards
-                  </button>
-                  <button onClick={loadData} style={{background:"transparent",border:"none",color:"rgba(255,255,255,0.4)",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",padding:"2px 0"}}>
-                    ↻ Refresh
-                  </button>
-                </div>
-              </div>
-              {/* Search */}
-              <div style={{position:"relative"}}>
-                <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,pointerEvents:"none"}}>🔍</span>
-                <input type="text" placeholder="Search any store, restaurant, gas station…"
-                  value={search} onChange={e=>setSearch(e.target.value)}
-                  style={{width:"100%",background:"rgba(255,255,255,0.12)",border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:14,padding:"13px 44px 13px 44px",fontSize:14,color:"#fff",outline:"none",fontFamily:"'DM Sans',sans-serif",backdropFilter:"blur(10px)",fontWeight:500}}/>
-                {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,width:26,height:26,cursor:"pointer",color:"#fff",fontSize:13}}>✕</button>}
-              </div>
+      {/* Input row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <span style={{ fontSize: 13, color: "#8896AA", fontWeight: 500, fontFamily: "'DM Sans',sans-serif" }}>Spend</span>
+        <div style={{
+          display: "flex", alignItems: "center",
+          background: "#F4F6F9", borderRadius: 10,
+          padding: "7px 12px", border: "1.5px solid #E8ECF2",
+        }}>
+          <span style={{ color: "#8896AA", fontWeight: 700, fontSize: 16 }}>$</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={rawVal}
+            onChange={e => setRawVal(e.target.value)}
+            onBlur={e => {
+              // On blur: clamp to 0 minimum, keep empty→0
+              const n = parseFloat(e.target.value);
+              setRawVal(isNaN(n) || n < 0 ? "0" : String(n));
+            }}
+            style={{
+              border: "none", background: "transparent", outline: "none",
+              fontSize: 22, fontWeight: 900, width: 90,
+              fontFamily: "'DM Sans',sans-serif", color: "#1a2744",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Results grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{
+          background: "linear-gradient(135deg,#EEF4FF,#E0EDFF)",
+          border: "1.5px solid #C8DEFF", borderRadius: 12,
+          padding: "12px 14px", textAlign: "center",
+        }}>
+          <div style={{ fontSize: 10, color: "#4A90D9", fontWeight: 600, marginBottom: 3, fontFamily: "'DM Sans',sans-serif" }}>Best card earns</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: "#1a2744", fontFamily: "'DM Sans',sans-serif" }}>${topEarns}</div>
+          <div style={{ fontSize: 10, color: "#8896AA", marginTop: 2, fontFamily: "'DM Sans',sans-serif" }}>{topName}</div>
+        </div>
+        <div style={{
+          background: "linear-gradient(135deg,#EFFAF4,#D8F5E6)",
+          border: "1.5px solid #B6EDD0", borderRadius: 12,
+          padding: "12px 14px", textAlign: "center",
+        }}>
+          <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 600, marginBottom: 3, fontFamily: "'DM Sans',sans-serif" }}>vs 2% baseline</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: "#1a2744", fontFamily: "'DM Sans',sans-serif" }}>+${extraVs2pct}</div>
+          <div style={{ fontSize: 10, color: "#8896AA", marginTop: 2, fontFamily: "'DM Sans',sans-serif" }}>extra earned</div>
+        </div>
+      </div>
+
+      {secondName && Number(extraVsSec) > 0 && (
+        <div style={{ marginTop: 10, fontSize: 12, color: "#8896AA", textAlign: "center", fontFamily: "'DM Sans',sans-serif" }}>
+          <span style={{ color: "#16A34A", fontWeight: 700 }}>${extraVsSec} more</span> than {secondName} (${secEarns})
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CARD CHIP ────────────────────────────────────────────────────────────────
+function CardChip({ card, rate, rank }) {
+  const isTop = rank === 0;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 12,
+      background: isTop ? "linear-gradient(135deg,#EEF4FF,#E8F0FF)" : "#fff",
+      border: `1.5px solid ${isTop ? "#C8DEFF" : "#E8ECF2"}`,
+      borderRadius: 14, padding: "12px 14px", marginBottom: 8,
+      boxShadow: isTop ? "0 2px 16px rgba(74,144,217,0.12)" : "0 1px 4px rgba(0,0,0,0.04)",
+      position: "relative",
+    }}>
+      {isTop && (
+        <div style={{
+          position: "absolute", top: -1, left: 14,
+          background: "#4A90D9", color: "#fff", fontSize: 9,
+          fontWeight: 800, padding: "2px 8px", borderRadius: "0 0 6px 6px",
+          letterSpacing: "0.06em", fontFamily: "'DM Sans',sans-serif",
+        }}>BEST</div>
+      )}
+      {/* Card color swatch */}
+      <div style={{
+        width: 36, height: 24, borderRadius: 5,
+        background: card.card_color || "#1A3A6B",
+        border: "1px solid rgba(0,0,0,0.08)", flexShrink: 0,
+        boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2744", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {card.issuer} {card.card_name}
+        </div>
+        <div style={{ fontSize: 11, color: "#8896AA", fontFamily: "'DM Sans',sans-serif" }}>
+          {card.annual_fee === "0" || !card.annual_fee ? "No annual fee" : `$${card.annual_fee}/yr`}
+          {card.special_tag ? ` · ${card.special_tag}` : ""}
+        </div>
+      </div>
+      <div style={{
+        fontSize: 20, fontWeight: 900, color: isTop ? "#4A90D9" : "#1a2744",
+        fontFamily: "'DM Sans',sans-serif", flexShrink: 0,
+      }}>
+        {rate}%
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [cards, setCards]           = useState([]);
+  const [stores, setStores]         = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
+  const [screen, setScreen]         = useState("home");   // home | results | manage
+  const [query, setQuery]           = useState("");
+  const [userCardIds, setUserCardIds] = useState([]);
+  const [results, setResults]       = useState([]);
+  const [selStore, setSelStore]     = useState(null);
+  const [notFound, setNotFound]     = useState(false);    // store-not-found banner
+  const [showCatModal, setShowCatModal] = useState(false);
+  const [twoPct, setTwoPct]         = useState([]);
+  const [animIn, setAnimIn]         = useState(false);
+
+  // ── Load sheets ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    async function load() {
+      try {
+        const [cRes, sRes] = await Promise.all([fetch(CSV(CARDS_SHEET_ID)), fetch(CSV(STORES_SHEET_ID))]);
+        if (!cRes.ok || !sRes.ok) throw new Error("Could not load data. Make sure both Google Sheets are set to 'Anyone with link can view'.");
+        const [cText, sText] = await Promise.all([cRes.text(), sRes.text()]);
+        const parsedCards  = parseCSV(cText).filter(c => c.active === "yes" || c.active === "true" || c.active === "1" || !c.active);
+        const parsedStores = parseCSV(sText);
+        setCards(parsedCards);
+        setStores(parsedStores);
+        // Default: all $0-fee cards selected
+        const freeIds = parsedCards.filter(c => !c.annual_fee || c.annual_fee === "0").map(c => c.card_id);
+        setUserCardIds(freeIds);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  // ── Compute results from a category ───────────────────────────────────────
+  const computeFromCategory = useCallback((cat, storeObj) => {
+    const col = CAT_COL[cat];
+    const myCards = cards.filter(c => userCardIds.includes(c.card_id));
+    let ranked;
+    if (col) {
+      ranked = myCards
+        .map(c => ({ card: c, rate: parseFloat(c[col] || c.base_rate || 1) }))
+        .filter(r => !isNaN(r.rate))
+        .sort((a, b) => b.rate - a.rate);
+    } else {
+      ranked = myCards
+        .map(c => ({ card: c, rate: parseFloat(c.base_rate || 1) }))
+        .sort((a, b) => b.rate - a.rate);
+    }
+    const twoPctList = cards.filter(c =>
+      (c.annual_fee === "0" || !c.annual_fee) &&
+      parseFloat(c.base_rate || 0) >= 2 &&
+      !userCardIds.includes(c.card_id)
+    );
+    setTwoPct(twoPctList);
+    setResults(ranked);
+    setSelStore(storeObj || { store_name: query, category: cat });
+    setShowCatModal(false);
+    setNotFound(false);
+    setScreen("results");
+    setTimeout(() => setAnimIn(true), 50);
+  }, [cards, userCardIds, query]);
+
+  // ── Handle search ──────────────────────────────────────────────────────────
+  function handleSearch() {
+    if (!query.trim() || !cards.length) return;
+    setAnimIn(false);
+    setNotFound(false);
+
+    // 1. Exact match in stores sheet
+    const match = stores.find(s => s.store_name?.toLowerCase() === query.trim().toLowerCase());
+    if (match) {
+      const cat = match.category?.toLowerCase();
+      computeFromCategory(cat, match);
+      return;
+    }
+
+    // 2. Partial match
+    const partial = stores.find(s => s.store_name?.toLowerCase().includes(query.trim().toLowerCase()));
+    if (partial) {
+      const cat = partial.category?.toLowerCase();
+      computeFromCategory(cat, partial);
+      return;
+    }
+
+    // 3. Keyword auto-detect
+    const detected = detectCategory(query.trim());
+    if (detected) {
+      computeFromCategory(detected, null);
+      return;
+    }
+
+    // 4. Not found → show banner + button
+    setNotFound(true);
+    setScreen("results");
+    setResults([]);
+    setSelStore({ store_name: query.trim() });
+    setAnimIn(false);
+  }
+
+  function pickCat(cat) {
+    computeFromCategory(cat, { store_name: query.trim(), category: cat });
+  }
+
+  function goHome() {
+    setScreen("home");
+    setQuery("");
+    setResults([]);
+    setNotFound(false);
+    setAnimIn(false);
+  }
+
+  // ── Grouped card manage ────────────────────────────────────────────────────
+  const issuers = [...new Set(cards.map(c => c.issuer))];
+
+  // ── LOADING ────────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div style={{ minHeight: "100svh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#F0F4FA", fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ fontSize: 32, marginBottom: 16 }}>💳</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2744" }}>Loading your cards…</div>
+      <div style={{ fontSize: 12, color: "#8896AA", marginTop: 6 }}>Fetching from Google Sheets</div>
+    </div>
+  );
+
+  if (error) return (
+    <div style={{ minHeight: "100svh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, background: "#F0F4FA", fontFamily: "'DM Sans',sans-serif" }}>
+      <div style={{ fontSize: 32, marginBottom: 16 }}>⚠️</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "#1a2744", textAlign: "center", marginBottom: 8 }}>Couldn't load data</div>
+      <div style={{ fontSize: 13, color: "#8896AA", textAlign: "center", lineHeight: 1.5, marginBottom: 20 }}>{error}</div>
+      <button onClick={() => window.location.reload()} style={{ background: "#1A3A6B", color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+        Try Again
+      </button>
+    </div>
+  );
+
+  const topResult = results[0];
+  const secondResult = results[1];
+
+  return (
+    <div style={{ minHeight: "100svh", background: "#F0F4FA", fontFamily: "'DM Sans',sans-serif", maxWidth: 480, margin: "0 auto", position: "relative", paddingBottom: 80 }}>
+      <style>{`
+        html, body { background: #F0F4FA; margin: 0; padding: 0; }
+        * { box-sizing: border-box; }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+      `}</style>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+      {/* ── HEADER ── */}
+      <div style={{
+        background: "linear-gradient(135deg,#1A3A6B 0%,#0d2045 60%,#1A3A6B 100%)",
+        padding: "28px 20px 22px", borderRadius: "0 0 24px 24px",
+        boxShadow: "0 4px 20px rgba(26,58,107,0.25)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#67C5FF", letterSpacing: "0.14em", textTransform: "uppercase" }}>SWIPE SMART</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", marginTop: 2, letterSpacing: "-0.02em" }}>Card Rewards Optimizer</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>YOUR CARDS</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{userCardIds.length}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── HOME SCREEN ── */}
+      {screen === "home" && (
+        <div style={{ padding: "20px 16px 0" }}>
+          {/* Search box */}
+          <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", border: "1.5px solid #E8ECF2" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2744", marginBottom: 10 }}>Where are you shopping?</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSearch()}
+                placeholder="e.g. Walmart, Food Lion, Shell…"
+                style={{
+                  flex: 1, border: "1.5px solid #E8ECF2", borderRadius: 12,
+                  padding: "10px 14px", fontSize: 15, fontFamily: "'DM Sans',sans-serif",
+                  outline: "none", color: "#1a2744", background: "#F8FAFF",
+                }}
+              />
+              <button onClick={handleSearch} style={{
+                background: "#1A3A6B", border: "none", borderRadius: 12,
+                padding: "10px 16px", cursor: "pointer", fontSize: 18,
+                boxShadow: "0 4px 12px rgba(26,58,107,0.3)",
+              }}>🔍</button>
             </div>
           </div>
 
-          {/* Body */}
-          <div style={{padding:"20px 16px 0",maxWidth:480,margin:"0 auto"}}>
-            {search ? (
-              <div>
-                <div style={{fontSize:11,fontWeight:700,color:"#8896AA",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>
-                  {filtStores.length} results for "{search}"
+          {/* Quick stores */}
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#8896AA", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Quick Select</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+            {(stores.length > 0 ? stores.slice(0, 16) : [
+              {store_name:"Walmart"},{store_name:"Amazon"},{store_name:"Target"},{store_name:"Kroger"},
+              {store_name:"Costco"},{store_name:"Starbucks"},{store_name:"McDonald's"},{store_name:"Shell"},
+              {store_name:"CVS"},{store_name:"Home Depot"},{store_name:"Chipotle"},{store_name:"Whole Foods"},
+            ]).map(s => (
+              <button key={s.store_name} onClick={() => { setQuery(s.store_name); handleSearch(); }} style={{
+                background: "#fff", border: "1.5px solid #E8ECF2", borderRadius: 20,
+                padding: "7px 14px", fontSize: 13, fontWeight: 600, color: "#1a2744",
+                cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "all .15s",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#EEF4FF"; e.currentTarget.style.borderColor = "#C8DEFF"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#E8ECF2"; }}
+              >
+                {s.store_name}
+              </button>
+            ))}
+          </div>
+
+          {/* Tips */}
+          <div style={{ background: "#fff", borderRadius: 16, padding: 16, border: "1.5px solid #E8ECF2", boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#4A90D9", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>💡 How It Works</div>
+            {[
+              ["Search any store", "Type a store name or pick from quick select"],
+              ["Get instant result", "We find the best card you own for that store"],
+              ["Manage your cards", "Add or remove cards in My Cards tab"],
+            ].map(([title, desc]) => (
+              <div key={title} style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "flex-start" }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#4A90D9", marginTop: 6, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2744" }}>{title}</div>
+                  <div style={{ fontSize: 11, color: "#8896AA" }}>{desc}</div>
                 </div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                  {filtStores.map(s=>(
-                    <StoreChip key={s.store_name} store={s} onClick={()=>{selectStore(s);setSearch("");}}/>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── RESULTS SCREEN ── */}
+      {screen === "results" && (
+        <div style={{ padding: "16px 16px 0" }}>
+          {/* Back + store name */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <button onClick={goHome} style={{
+              background: "#fff", border: "1.5px solid #E8ECF2", borderRadius: 10,
+              width: 36, height: 36, cursor: "pointer", fontSize: 16,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+            }}>←</button>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#1a2744" }}>{selStore?.store_name || query}</div>
+              {selStore?.category && (
+                <div style={{ fontSize: 11, color: "#8896AA", textTransform: "capitalize" }}>
+                  {selStore.category.replace("_", " ")} category
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── NOT FOUND BANNER ── */}
+          {notFound && (
+            <div style={{
+              background: "#fff", border: "1.5px solid #FDE68A", borderRadius: 16,
+              padding: 18, marginBottom: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+            }}>
+              <div style={{ fontSize: 20, marginBottom: 8 }}>🔍</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#1a2744", marginBottom: 4 }}>
+                "{query}" not found
+              </div>
+              <div style={{ fontSize: 13, color: "#8896AA", lineHeight: 1.5, marginBottom: 14 }}>
+                We don't have this store in our database yet. Tell us what type of store it is and we'll find the best card to use.
+              </div>
+              <button onClick={() => setShowCatModal(true)} style={{
+                background: "#1A3A6B", color: "#fff", border: "none",
+                borderRadius: 12, padding: "12px 20px", fontSize: 14,
+                fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                width: "100%", boxShadow: "0 4px 12px rgba(26,58,107,0.3)",
+              }}>
+                📂 Pick a Category for This Store
+              </button>
+            </div>
+          )}
+
+          {/* ── RESULTS ── */}
+          {results.length > 0 && (
+            <>
+              {results.map((r, i) => (
+                <div key={r.card.card_id} style={{
+                  opacity: animIn ? 1 : 0,
+                  transform: animIn ? "translateY(0)" : "translateY(20px)",
+                  transition: `opacity .35s ${i * 0.07}s, transform .35s cubic-bezier(.16,1,.3,1) ${i * 0.07}s`,
+                }}>
+                  <CardChip card={r.card} rate={r.rate} rank={i} />
+                </div>
+              ))}
+
+              {/* Savings Calculator */}
+              {topResult && (
+                <div style={{
+                  opacity: animIn ? 1 : 0,
+                  transition: "opacity .35s .3s",
+                }}>
+                  <SavingsCalc
+                    topRate={topResult.rate}
+                    topName={`${topResult.card.issuer} ${topResult.card.card_name}`}
+                    secondRate={secondResult?.rate || 2}
+                    secondName={secondResult ? `${secondResult.card.issuer} ${secondResult.card.card_name}` : null}
+                  />
+                </div>
+              )}
+
+              {/* 2% tip */}
+              {twoPct.length > 0 && topResult && topResult.rate < 2 && (
+                <div style={{
+                  background: "#FFFBEB", border: "1.5px solid #FDE68A",
+                  borderRadius: 14, padding: 14, marginBottom: 14,
+                  opacity: animIn ? 1 : 0, transition: "opacity .35s .4s",
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#D97706", marginBottom: 8, fontFamily: "'DM Sans',sans-serif" }}>
+                    💡 Earn More — Consider These Cards
+                  </div>
+                  <div style={{ fontSize: 12, color: "#92400E", marginBottom: 10, fontFamily: "'DM Sans',sans-serif" }}>
+                    Your best card gives {topResult.rate}% here. These no-fee cards give a flat 2% everywhere:
+                  </div>
+                  {twoPct.map(c => (
+                    <div key={c.card_id} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      background: "rgba(255,255,255,0.7)", borderRadius: 10,
+                      padding: "8px 12px", marginBottom: 6, border: "1px solid #FDE68A",
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1a2744", fontFamily: "'DM Sans',sans-serif" }}>{c.issuer} {c.card_name}</div>
+                        <div style={{ fontSize: 10, color: "#8896AA", fontFamily: "'DM Sans',sans-serif" }}>No annual fee</div>
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: "#D97706", fontFamily: "'DM Sans',sans-serif" }}>2%</div>
+                    </div>
                   ))}
                 </div>
-                {filtStores.length===0&&(
-                  <div style={{textAlign:"center",paddingTop:40}}>
-                    <div style={{fontSize:40,marginBottom:12}}>🏪</div>
-                    <div style={{fontSize:15,fontWeight:700,color:"#1a2744",marginBottom:4}}>"{search}" isn't in our list yet</div>
-                    <div style={{fontSize:13,color:"#8896AA",marginBottom:20,lineHeight:1.5}}>We'll detect the category automatically<br/>and find your best card</div>
-                    <button onClick={()=>handleUnknown(search)}
-                      style={{background:"#4A90D9",border:"none",borderRadius:14,padding:"13px 28px",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:"0 4px 16px rgba(74,144,217,0.3)"}}>
-                      Find best card for "{search}" →
-                    </button>
-                  </div>
-                )}
-                {filtStores.length>0&&filtStores.length<=3&&(
-                  <button onClick={()=>handleUnknown(search)}
-                    style={{marginTop:12,background:"#EEF4FF",border:"1.5px solid #C8DEFF",borderRadius:12,padding:"11px 16px",color:"#4A90D9",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",width:"100%"}}>
-                    Use "{search}" as a custom store →
-                  </button>
-                )}
-              </div>
-            ) : (
-              STORE_CATS.map(sc=>{
-                const stores = allStores.filter(s=>sc.filter.includes(s.category));
-                if(!stores.length) return null;
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── MY CARDS SCREEN ── */}
+      {screen === "manage" && (
+        <div style={{ padding: "16px 16px 0" }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#1a2744", marginBottom: 4 }}>My Cards</div>
+          <div style={{ fontSize: 12, color: "#8896AA", marginBottom: 16 }}>
+            Toggle the cards you own. Only selected cards are compared.
+          </div>
+          {issuers.map(issuer => (
+            <div key={issuer} style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "#8896AA", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>{issuer}</div>
+              {cards.filter(c => c.issuer === issuer).map(card => {
+                const on = userCardIds.includes(card.card_id);
                 return (
-                  <div key={sc.label} style={{marginBottom:24}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-                      <span style={{fontSize:14}}>{sc.icon}</span>
-                      <span style={{fontSize:12,fontWeight:700,color:"#8896AA",letterSpacing:"0.06em",textTransform:"uppercase"}}>{sc.label}</span>
+                  <label key={card.card_id} style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    background: on ? "#EEF4FF" : "#fff",
+                    border: `1.5px solid ${on ? "#C8DEFF" : "#E8ECF2"}`,
+                    borderRadius: 14, padding: "11px 14px", marginBottom: 8,
+                    cursor: "pointer", transition: "all .15s",
+                  }}>
+                    <input
+                      type="checkbox" checked={on}
+                      onChange={() => setUserCardIds(prev =>
+                        on ? prev.filter(id => id !== card.card_id) : [...prev, card.card_id]
+                      )}
+                      style={{ accentColor: "#1A3A6B", width: 16, height: 16, flexShrink: 0 }}
+                    />
+                    <div style={{
+                      width: 28, height: 18, borderRadius: 4,
+                      background: card.card_color || "#1A3A6B",
+                      border: "1px solid rgba(0,0,0,0.1)", flexShrink: 0,
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: on ? "#1a2744" : "#8896AA", fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {card.card_name}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#BBC5D5", fontFamily: "'DM Sans',sans-serif" }}>
+                        {!card.annual_fee || card.annual_fee === "0" ? "No annual fee" : `$${card.annual_fee}/yr`} · {card.base_rate}% base
+                      </div>
                     </div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                      {stores.map(s=><StoreChip key={s.store_name} store={s} onClick={()=>selectStore(s)}/>)}
-                    </div>
-                  </div>
+                    {card.special_tag && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 800,
+                        color: card.card_accent || "#4A90D9",
+                        background: `${card.card_accent || "#4A90D9"}18`,
+                        padding: "3px 8px", borderRadius: 5, flexShrink: 0,
+                        border: `1px solid ${card.card_accent || "#4A90D9"}30`,
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}>{card.special_tag}</span>
+                    )}
+                  </label>
                 );
-              })
-            )}
-          </div>
+              })}
+            </div>
+          ))}
         </div>
       )}
 
-      {/* ══════════════ RESULTS ══════════════ */}
-      {screen==="results"&&selStore&&(
-        <div style={{paddingBottom:90}}>
-          {/* Header */}
-          <div style={{background:"linear-gradient(135deg,#1a2744 0%,#1A3A6B 60%,#1e4a8a 100%)",padding:"48px 20px 24px",borderRadius:"0 0 28px 28px",boxShadow:"0 8px 32px rgba(26,39,68,0.2)"}}>
-            <div style={{maxWidth:480,margin:"0 auto"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
-                <button onClick={goHome} style={{background:"rgba(255,255,255,0.15)",border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:10,width:38,height:38,cursor:"pointer",color:"#fff",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,backdropFilter:"blur(8px)"}}>←</button>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>
-                    {CATS.find(c=>c.id===selCat)?.icon} {CATS.find(c=>c.id===selCat)?.label||selCat}
-                  </div>
-                  <div style={{fontSize:20,fontWeight:900,color:"#fff",display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:22}}>{selStore.icon}</span>
-                    <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selStore.store_name}</span>
-                  </div>
-                </div>
-                <button onClick={()=>setShowCatModal(true)} style={{background:"rgba(255,255,255,0.12)",border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:10,padding:"7px 11px",color:"rgba(255,255,255,0.8)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0,whiteSpace:"nowrap",backdropFilter:"blur(8px)"}}>
-                  ✏️ Category
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div style={{padding:"20px 16px 0",maxWidth:480,margin:"0 auto"}}>
-            {/* Cards */}
-            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-              {results.slice(0,4).map(({card,rate,isBoost},i)=>(
-                <div key={card.card_id} style={{opacity:animIn?1:0,transform:animIn?"none":"translateY(18px)",transition:`opacity .35s ${i*.07}s, transform .4s cubic-bezier(.16,1,.3,1) ${i*.07}s`}}>
-                  <CreditCardUI card={card} rate={rate} rank={i} isBoost={isBoost}/>
-                </div>
-              ))}
-            </div>
-
-            {/* 2% floor suggestion */}
-            {!userHas2&&topRate<2&&twoPct.length>0&&(
-              <div style={{background:"#FFFBEB",border:"1.5px solid #FDE68A",borderRadius:16,padding:16,marginBottom:14}}>
-                <div style={{fontSize:11,fontWeight:800,color:"#D97706",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>💡 You Could Earn More</div>
-                <div style={{fontSize:13,color:"#78350F",lineHeight:1.6,marginBottom:10}}>
-                  Your best card gives <strong>{topRate}%</strong> here. These $0-fee cards give a flat <strong>2% everywhere</strong>:
-                </div>
-                {twoPct.map(c=>(
-                  <div key={c.card_id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(255,255,255,0.6)",borderRadius:10,padding:"10px 14px",marginBottom:6,border:"1px solid #FDE68A"}}>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#1a2744"}}>{c.issuer} {c.card_name}</div>
-                      <div style={{fontSize:11,color:"#8896AA"}}>No annual fee · {c.reward_type}</div>
-                    </div>
-                    <div style={{fontSize:18,fontWeight:900,color:"#D97706"}}>2%</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Savings calc */}
-            {results[0]&&(
-              <div style={{background:"#fff",border:"1.5px solid #E8ECF2",borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 2px 12px rgba(0,0,0,0.05)"}}>
-                <div style={{fontSize:11,fontWeight:800,color:"#4A90D9",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>💰 Savings Calculator</div>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                  <span style={{fontSize:13,color:"#8896AA",fontWeight:500}}>Spend</span>
-                  <div style={{display:"flex",alignItems:"center",background:"#F4F6F9",borderRadius:10,padding:"8px 14px",border:"1.5px solid #E8ECF2"}}>
-                    <span style={{color:"#8896AA",fontWeight:700,fontSize:16}}>$</span>
-                    <input type="number" value={amount} onChange={e=>setAmount(Math.max(1,Number(e.target.value)))}
-                      style={{background:"transparent",border:"none",outline:"none",fontSize:22,fontWeight:900,color:"#1a2744",width:80,fontFamily:"'DM Sans',sans-serif"}}/>
-                  </div>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div style={{background:"linear-gradient(135deg,#EEF4FF,#E0EDFF)",border:"1.5px solid #C8DEFF",borderRadius:12,padding:"12px 14px",textAlign:"center"}}>
-                    <div style={{fontSize:11,color:"#4A90D9",fontWeight:600,marginBottom:3}}>You earn back</div>
-                    <div style={{fontSize:24,fontWeight:900,color:"#1a2744"}}>${(amount*results[0].rate/100).toFixed(2)}</div>
-                    <div style={{fontSize:10,color:"#8896AA",marginTop:2}}>{results[0].rate}% · {results[0].card.card_name}</div>
-                  </div>
-                  <div style={{background:"linear-gradient(135deg,#ECFDF5,#D1FAE5)",border:"1.5px solid #A7F3D0",borderRadius:12,padding:"12px 14px",textAlign:"center"}}>
-                    <div style={{fontSize:11,color:"#059669",fontWeight:600,marginBottom:3}}>Yearly est.</div>
-                    <div style={{fontSize:24,fontWeight:900,color:"#1a2744"}}>${(amount*results[0].rate/100*52).toFixed(0)}</div>
-                    <div style={{fontSize:10,color:"#8896AA",marginTop:2}}>at ${amount}/week</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* All cards list */}
-            <div style={{background:"#fff",border:"1.5px solid #E8ECF2",borderRadius:16,padding:16,marginBottom:20,boxShadow:"0 2px 12px rgba(0,0,0,0.05)"}}>
-              <div style={{fontSize:11,fontWeight:800,color:"#8896AA",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>ALL YOUR CARDS RANKED</div>
-              {results.map(({card,rate,isBoost},i)=>(
-                <div key={card.card_id} style={{display:"flex",alignItems:"center",gap:10,paddingBottom:10,marginBottom:10,borderBottom:i<results.length-1?"1.5px solid #F4F6F9":"none"}}>
-                  <div style={{width:20,textAlign:"center",fontSize:12,fontWeight:800,color:i===0?"#4A90D9":"#BBC5D5",flexShrink:0}}>{i===0?"★":`${i+1}`}</div>
-                  <div style={{width:12,height:12,borderRadius:3,background:`${card.card_color||"#ccc"}`,flexShrink:0,border:"1px solid rgba(0,0,0,0.08)"}}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,fontWeight:700,color:i===0?"#1a2744":"#8896AA",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                      {card.issuer} {card.card_name}{isBoost&&<span style={{marginLeft:5,fontSize:10}}>🔥</span>}
-                    </div>
-                    <div style={{fontSize:10,color:"#BBC5D5"}}>{card.annual_fee==="0"||card.annual_fee===""?"No fee":`$${card.annual_fee}/yr`}</div>
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0}}>
-                    <div style={{fontSize:16,fontWeight:900,color:i===0?"#4A90D9":"#BBC5D5"}}>{rate}%</div>
-                    <div style={{fontSize:10,color:"#BBC5D5"}}>${(amount*rate/100).toFixed(2)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════ MY CARDS ══════════════ */}
-      {screen==="manage"&&(
-        <div style={{paddingBottom:90}}>
-          <div style={{background:"linear-gradient(135deg,#1a2744 0%,#1A3A6B 60%,#1e4a8a 100%)",padding:"48px 20px 24px",borderRadius:"0 0 28px 28px",boxShadow:"0 8px 32px rgba(26,39,68,0.2)"}}>
-            <div style={{maxWidth:480,margin:"0 auto",display:"flex",alignItems:"center",gap:12}}>
-              <button onClick={goHome} style={{background:"rgba(255,255,255,0.15)",border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:10,width:38,height:38,cursor:"pointer",color:"#fff",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,backdropFilter:"blur(8px)"}}>←</button>
-              <div>
-                <h2 style={{margin:0,fontSize:22,fontWeight:900,color:"#fff"}}>My Cards</h2>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:2}}>{userCards.length} of {allCards.length} selected</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{padding:"20px 16px 0",maxWidth:480,margin:"0 auto"}}>
-            <div style={{background:"#EEF4FF",border:"1.5px solid #C8DEFF",borderRadius:12,padding:"12px 16px",marginBottom:18,fontSize:12,color:"#1a2744",lineHeight:1.6}}>
-              📊 Add/edit cards in your <strong style={{color:"#4A90D9"}}>Google Sheet</strong>, then tap ↻ Refresh on the home screen to sync.
-            </div>
-
-            {["Chase","Citi","Capital One","American Express","Bank of America","Discover","Wells Fargo","US Bank","PNC","Synchrony/Chase","TD Bank","Navy Federal"].map(issuer=>{
-              const cards = allCards.filter(c=>c.issuer===issuer);
-              if(!cards.length) return null;
-              return (
-                <div key={issuer} style={{marginBottom:20}}>
-                  <div style={{fontSize:11,fontWeight:700,color:"#8896AA",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:8}}>{issuer}</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                    {cards.map(card=>{
-                      const on = cardIds.includes(card.card_id);
-                      return (
-                        <label key={card.card_id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderRadius:14,background:on?"#EEF4FF":"#fff",border:`1.5px solid ${on?"#4A90D9":"#E8ECF2"}`,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,0.04)",transition:"all .15s"}}>
-                          <input type="checkbox" checked={on}
-                            onChange={()=>setCardIds(prev=>on?prev.filter(id=>id!==card.card_id):[...prev,card.card_id])}
-                            style={{accentColor:"#4A90D9",width:16,height:16,flexShrink:0}}/>
-                          <div style={{width:24,height:16,borderRadius:4,background:`${card.card_color||"#ccc"}`,flexShrink:0,border:"1px solid rgba(0,0,0,0.1)"}}/>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:700,color:on?"#1a2744":"#8896AA",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{card.card_name}</div>
-                            <div style={{fontSize:10,color:"#BBC5D5"}}>
-                              {card.annual_fee==="0"||card.annual_fee===""?"No annual fee":`$${card.annual_fee}/yr`} · {card.base_rate}% base
-                            </div>
-                          </div>
-                          {card.special_tag&&(
-                            <span style={{fontSize:9,fontWeight:800,color:card.card_accent||"#4A90D9",background:`${card.card_accent||"#4A90D9"}18`,padding:"3px 8px",borderRadius:5,flexShrink:0,border:`1px solid ${card.card_accent||"#4A90D9"}30`}}>
-                              {card.special_tag}
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ══ BOTTOM NAV ══ */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(20px)",borderTop:"1.5px solid #E8ECF2",padding:"10px 16px 20px",zIndex:100,display:"flex",gap:10,maxWidth:"100%",boxShadow:"0 -4px 20px rgba(0,0,0,0.06)"}}>
-        {[{id:"home",label:"🏠 Home"},{id:"manage",label:"💳 My Cards"}].map(tab=>(
+      {/* ── BOTTOM NAV (2 tabs only — no Sheets tab) ── */}
+      <div style={{
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        background: "rgba(255,255,255,0.97)", backdropFilter: "blur(20px)",
+        borderTop: "1.5px solid #E8ECF2", padding: "10px 16px 20px",
+        zIndex: 100, display: "flex", gap: 10,
+        boxShadow: "0 -4px 20px rgba(0,0,0,0.06)",
+        maxWidth: 480, margin: "0 auto",
+      }}>
+        {[
+          { id: "home",   label: "🏠 Home" },
+          { id: "manage", label: "💳 My Cards" },
+        ].map(tab => (
           <button key={tab.id}
-            onClick={()=>tab.id==="home"?goHome():setScreen(tab.id)}
-            style={{flex:1,background:screen===tab.id?"#1A3A6B":"#F4F6F9",border:`1.5px solid ${screen===tab.id?"#1A3A6B":"#E8ECF2"}`,borderRadius:12,padding:"11px 0",cursor:"pointer",color:screen===tab.id?"#fff":"#8896AA",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",letterSpacing:"0.06em",textTransform:"uppercase",transition:"all .2s",boxShadow:screen===tab.id?"0 4px 12px rgba(26,58,107,0.3)":"none"}}>
+            onClick={() => tab.id === "home" ? goHome() : setScreen(tab.id)}
+            style={{
+              flex: 1,
+              background: screen === tab.id ? "#1A3A6B" : "#F4F6F9",
+              border: `1.5px solid ${screen === tab.id ? "#1A3A6B" : "#E8ECF2"}`,
+              borderRadius: 12, padding: "11px 0", cursor: "pointer",
+              color: screen === tab.id ? "#fff" : "#8896AA",
+              fontSize: 12, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              transition: "all .2s",
+              boxShadow: screen === tab.id ? "0 4px 12px rgba(26,58,107,0.3)" : "none",
+            }}>
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Category modal */}
-      {showCatModal&&(
-        <CatModal storeName={selStore?.store_name||""} onPick={pickCat} onClose={()=>setShowCatModal(false)}/>
+      {/* ── CATEGORY PICKER MODAL ── */}
+      {showCatModal && (
+        <CategoryPickerModal
+          storeName={selStore?.store_name || query}
+          onPick={pickCat}
+          onClose={() => setShowCatModal(false)}
+        />
       )}
     </div>
   );
